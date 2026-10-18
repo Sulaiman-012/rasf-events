@@ -22,7 +22,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Apply database migrations, upload secrets, deploy
+      - name: Upload secrets and deploy
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -30,9 +30,9 @@ jobs:
           secrets: |
             SETUP_KEY
             SESSION_SECRET
-          command: |
-            d1 migrations apply DB --remote
-            deploy
+          # Tables are created by the Worker itself on first request (src/lib.ts ensureSchema),
+          # so the token only needs "Workers Scripts: Edit".
+          command: deploy
         env:
           SETUP_KEY: ${{ secrets.SETUP_KEY }}
           SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
