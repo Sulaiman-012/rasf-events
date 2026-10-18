@@ -546,6 +546,7 @@ function openEditor(id) {
   const cs = $('#edit-comp'); cs.replaceChildren(); A().competitions.forEach((x) => cs.append(el('option', { value: x.id, text: x.name }))); cs.value = String(q.competitionId || A().competitions[0].id);
   $('#edit-id').value = id || ''; $('#edit-question').value = q.text; $('#edit-type').value = q.type; $('#edit-attempts').value = q.attempts; $('#edit-duration').value = q.duration;
   $('#edit-correct').replaceChildren(); buildOptionInputs(q.type, q.options); $('#edit-correct').value = String(q.correct ?? 0); $('#question-error').textContent = '';
+  $('#edit-show').checked = !id || A().state.activeQuestionId !== id; $('#edit-show-label').hidden = !!id && A().state.activeQuestionId === id;
   $('#question-dialog').showModal();
 }
 $('#edit-type').onchange = () => buildOptionInputs($('#edit-type').value, $$('[data-option]').map((i) => i.value));
@@ -566,7 +567,14 @@ $('#question-form').addEventListener('submit', async (e) => {
   if (type === 'truefalse') correct = Number($('#edit-correct').value);
   const id = $('#edit-id').value;
   const body = { competitionId: Number($('#edit-comp').value), text, type, options, correct, attempts: clamp($('#edit-attempts').value, 1, 10, 1), duration: clamp($('#edit-duration').value, 5, 300, 20) };
-  try { await act(() => id ? api('PUT', `/api/admin/questions/${id}`, body) : api('POST', '/api/admin/questions', body), 'تم حفظ السؤال.'); $('#question-dialog').close(); }
+  const show = $('#edit-show').checked && !$('#edit-show-label').hidden;
+  try {
+    const r = await act(() => id ? api('PUT', `/api/admin/questions/${id}`, body) : api('POST', '/api/admin/questions', body), show ? null : 'تم حفظ السؤال.');
+    $('#question-dialog').close();
+    const qid = Number(id) || (r && r.id);
+    // Show it right away: also activates its competition if another one is active.
+    if (show && qid) await setState({ activeCompetitionId: body.competitionId, activeQuestionId: qid }, 'تم حفظ السؤال، وهو معروض الآن على الشاشات والجوالات.');
+  }
   catch (x) { err.textContent = x.message; }
 });
 
