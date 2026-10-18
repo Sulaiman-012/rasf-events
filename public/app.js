@@ -2,14 +2,21 @@
    All data comes from the Worker API under /api. User text is always written with textContent. */
 'use strict';
 (() => {
-const CFG = Object.assign({ screenPollMs: 5000, phonePollMs: 8000, adminPollMs: 10000, heartbeatMs: 60000, kioskResetMs: 7000 }, window.RASF_CONFIG || {});
+const CFG = Object.assign({ screenPollMs: 5000, phonePollMs: 8000, adminPollMs: 10000, heartbeatMs: 60000, kioskResetMs: 7000, pairPollMs: 5000 }, window.RASF_CONFIG || {});
 const DEFAULT_LOGO = '/rasf-logo.png';
 const DEFAULT_IDENTITY = { primary: '#8d6d52', accent: '#c6ab8c', background: '#f3eee7', logoUrl: null };
 const ORIGIN = location.origin;
 const EMPLOYEE_URL = ORIGIN + '/';
 const PATH = location.pathname.replace(/\/+$/, '') || '/';
-const MODE = PATH === '/admin' ? 'admin' : PATH === '/setup' ? 'setup' : PATH.startsWith('/screen') ? 'screen' : 'employee';
-const SCREEN_KEY = MODE === 'screen' ? decodeURIComponent(PATH.split('/')[2] || '').slice(0, 40) : '';
+// /tv is the single shared screen link: the device remembers which screen it was paired to (localStorage).
+const IS_TV = PATH === '/tv';
+const MODE = PATH === '/admin' ? 'admin' : PATH === '/setup' ? 'setup' : (PATH.startsWith('/screen') || IS_TV) ? 'screen' : 'employee';
+const TV_STORE = 'rasf_screen_key';
+function storedKey() { try { return (localStorage.getItem(TV_STORE) || '').slice(0, 40); } catch { return ''; } }
+function storeKey(k) { try { if (k) localStorage.setItem(TV_STORE, k); else localStorage.removeItem(TV_STORE); } catch { /* storage blocked: pairing lasts until reload */ } }
+let SCREEN_KEY = IS_TV ? storedKey() : MODE === 'screen' ? decodeURIComponent(PATH.split('/')[2] || '').slice(0, 40) : '';
+/** Touch answering on a screen needs a known screen; an unpaired /tv only shows the quiz and QR. */
+const kioskOn = () => MODE === 'screen' && !!SCREEN_KEY && !(IS_TV && !(S.pub && S.pub.screen));
 const MAX_UPLOAD = 1500000;
 const LETTERS = ['أ', 'ب', 'ج', 'د'];
 const TEXT_TYPES = ['short', 'essay'];
@@ -164,6 +171,12 @@ function renderDisplay() {
   $('#question-support').textContent = TEXT_TYPES.includes(q.type) ? 'اكتب إجابتك وأرسلها قبل انتهاء الوقت.' : 'اختر إجابتك قبل انتهاء الوقت، وسيظهر لك التقييم فورًا.';
   if (S.run) return;
 
+  if (MODE === 'screen' && !kioskOn()) {
+    $('#participant-entry').hidden = true; $('#timer-row').hidden = true;
+    renderOptions(q, false, null);
+    status('امسح الرمز بجوالك للمشاركة في المسابقة.');
+    return;
+  }
   const kiosk = MODE === 'screen';
   if (!kiosk && S.me && S.recQid !== q.id) ensureRecord(q.id);
   $('#participant-entry').hidden = false;
@@ -326,7 +339,8 @@ $('#send-message').onclick = async () => {
 function renderScreen() {
   if (MODE !== 'screen' || !S.pub) return;
   const sc = S.pub.screen;
-  if (sc === null) note('هذه الشاشة غير موجودة أو تغيّر رابطها. انسخ رابط الشاشة من لوحة الإدارة ← «شاشات العرض».');
+  if (IS_TV) { if (sc === null && SCREEN_KEY) setTimeout(unpair, 0); }
+  else if (sc === null) note('هذه الشاشة غير موجودة أو تغيّر رابطها. انسخ رابط الشاشة من لوحة الإدارة ← «شاشات العرض».');
   else note('');
   const media = sc && sc.media;
   const stage = $('#media-stage'); stage.hidden = !media;
@@ -336,7 +350,55 @@ function renderScreen() {
       box.dataset.id = String(media.id); box.replaceChildren(el('img', { src: media.url, alt: media.name || 'صورة العرض' }));
     }
   } else $('#stage-media').dataset.id = '';
+  showBadge();
 }
+
+/* ---------------- /tv pairing (one link for every screen) ---------------- */
+const pairing = { token: null, code: null, timer: null, gen: 0 };
+function showBadge() {
+  const b = $('#pair-badge'); if (!b) return;
+  b.hidden = !(IS_TV && !SCREEN_KEY && pairing.code && $('#media-stage').hidden);
+  if (pairing.code) $('#pair-code').textContent = pairing.code;
+}
+async function startPairing() {
+  if (!IS_TV || SCREEN_KEY) return;
+  clearTimeout(pairing.timer); const gen = ++pairing.gen;
+  pairing.code = null; pairing.token = null; showBadge();
+  try {
+    const r = await api('POST', '/api/tv/pair');
+    if (gen !== pairing.gen) return;
+    pairing.token = r.token; pairing.code = r.code; showBadge();
+    pairing.timer = setTimeout(() => checkPairing(gen), CFG.pairPollMs);
+  } catch (e) {
+    if (gen === pairing.gen) pairing.timer = setTimeout(startPairing, e.status === 429 ? 60000 : 10000);
+  }
+}
+async function checkPairing(gen) {
+  if (gen !== pairing.gen || SCREEN_KEY) return;
+  let r;
+  try { r = await api('GET', '/api/tv/pair/' + encodeURIComponent(pairing.token)); }
+  catch (e) {
+    if (gen !== pairing.gen) return;
+    if (e.status === 410 || e.status === 404) { startPairing(); return; } // expired: show a fresh code
+    pairing.timer = setTimeout(() => checkPairing(gen), CFG.pairPollMs); return;
+  }
+  if (gen !== pairing.gen) return;
+  if (r.screenKey) { pairing.gen++; pairing.code = null; pairing.token = null; becomeScreen(r.screenKey); return; }
+  pairing.timer = setTimeout(() => checkPairing(gen), CFG.pairPollMs);
+}
+function becomeScreen(key) {
+  SCREEN_KEY = key; storeKey(key); showBadge();
+  refreshPublic(true).then(heartbeat);
+}
+/** The stored key is no longer valid (screen deleted or «رابط جديد»): forget it and show a new code. */
+function unpair() {
+  if (!IS_TV || !SCREEN_KEY) return;
+  SCREEN_KEY = ''; storeKey('');
+  stopRun(); clearTimeout(scheduleKioskReset.t); S.kioskName = ''; S.kioskReset = false; S.rec = null; S.recQid = null;
+  $('#participant-name').value = ''; setFeedback('');
+  startPairing(); refreshPublic(true);
+}
+function heartbeat() { if (SCREEN_KEY) api('POST', `/api/screens/${encodeURIComponent(SCREEN_KEY)}/heartbeat`).catch(() => {}); }
 
 /* ---------------- QR (vendored qrcode-generator, MIT) ---------------- */
 function drawQR(target) {
@@ -392,7 +454,9 @@ function renderAdmin() {
         confirmButton('حذف', () => act(() => api('DELETE', `/api/admin/groups/${g.id}`), 'تم حذف المجموعة.')))));
   });
   // screens
-  const sl = $('#screen-list'); sl.replaceChildren();
+  const sl = $('#screen-list');
+  const focusId = document.activeElement && document.activeElement.id; // keep typing focus across re-renders
+  sl.replaceChildren();
   if (!a.screens.length) sl.append(el('div', { class: 'empty', text: 'أضف شاشة لتحصل على رابطها الخاص، ثم افتح الرابط في متصفح شاشة LG.' }));
   a.screens.forEach((s) => {
     const g = byId(a.groups, s.groupId); const url = ORIGIN + '/screen/' + s.key;
@@ -401,12 +465,14 @@ function renderAdmin() {
       el('span', { class: 'ri-name' }, el('span', { class: 'dot' + (online ? ' on' : '') }), document.createTextNode(s.name), el('br'), el('small', { style: 'color:#8a7462', text: online ? 'متصلة الآن' : s.lastSeen ? 'آخر اتصال ' + ago(s.lastSeen) : 'لم تتصل بعد' })),
       el('span', { class: 'resource-status', text: g ? g.name : 'بدون مجموعة' }),
       el('span', { class: 'ri-actions' }, contentSelect(s.mediaId ? String(s.mediaId) : 'quiz', (v) => quiet(act(() => api('POST', `/api/admin/screens/${s.id}/content`, { content: v }), 'تم تحديث محتوى الشاشة.'))),
-        el('button', { class: 'mini-button', type: 'button', text: 'نسخ الرابط', onclick: () => copy(url) }),
+        el('button', { class: 'mini-button pair-open', type: 'button', text: 'ربط شاشة بالرمز', onclick: () => { S.pairOpen = { id: s.id, value: '', error: '' }; renderAdmin(); const i = $('#pair-input-' + s.id); if (i) i.focus(); } }),
         el('button', { class: 'mini-button', type: 'button', text: 'تعديل', onclick: () => openResource('screen', s.id) }),
         confirmButton('رابط جديد', () => act(() => api('POST', `/api/admin/screens/${s.id}/rekey`), 'تم إنشاء رابط جديد؛ الرابط القديم توقف. حدّث رابط جهاز LG.')),
         confirmButton('حذف', () => act(() => api('DELETE', `/api/admin/screens/${s.id}`), 'تم حذف الشاشة.'))),
-      el('div', { class: 'link-row', style: 'width:100%;border:0;padding-top:0' }, el('code', { text: url }))));
+      S.pairOpen && S.pairOpen.id === s.id ? pairForm(s) : null,
+      el('div', { class: 'link-row', style: 'width:100%;border:0;padding-top:0' }, el('div', { class: 'row' }, el('small', { style: 'color:#8a7462', text: 'رابط خاص بهذه الشاشة (اختياري، للمتقدمين)' }), el('button', { class: 'mini-button', type: 'button', text: 'نسخ الرابط', onclick: () => copy(url) })), el('code', { text: url }))));
   });
+  if (focusId && focusId.startsWith('pair-input-')) { const i = $('#' + focusId); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }
   // events
   const evl = $('#event-list'); evl.replaceChildren();
   if (!a.events.length) evl.append(el('div', { class: 'empty', text: 'جهّز أول فعالية: مثل يوم التأسيس أو اليوم العالمي للسلامة.' }));
@@ -451,11 +517,39 @@ function renderMessagesAdmin() {
   });
 }
 
+/** Inline form under a screen row: type the 4-digit code shown on a /tv device. */
+function pairForm(s) {
+  const st = S.pairOpen;
+  const inp = el('input', { id: 'pair-input-' + s.id, class: 'pair-input', inputmode: 'numeric', maxlength: '4', placeholder: '٠٠٠٠', dir: 'ltr', autocomplete: 'off', 'aria-label': 'رمز الربط الظاهر على الشاشة' });
+  inp.value = st.value;
+  const err = el('span', { class: 'pair-error', role: 'alert', text: st.error || '' });
+  inp.oninput = () => { st.value = inp.value; if (st.error) { st.error = ''; err.textContent = ''; } };
+  const btn = el('button', { class: 'primary-button', type: 'button', text: 'ربط' });
+  const submit = async () => {
+    const code = inp.value.trim();
+    if (!/^[0-9٠-٩]{4}$/.test(code)) { st.error = 'اكتب الرمز المكوّن من ٤ أرقام الظاهر على الشاشة.'; renderAdmin(); return; }
+    btn.disabled = true;
+    try {
+      await api('POST', `/api/admin/screens/${s.id}/pair`, { code });
+      S.pairOpen = null; toast('تم ربط الشاشة «' + s.name + '». تتحول خلال ثوانٍ.');
+      await refreshAdmin(true); renderAdmin();
+    } catch (e) { st.error = e.message; btn.disabled = false; renderAdmin(); if (e.status === 401) handleSignedOut(); }
+  };
+  btn.onclick = submit;
+  inp.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); submit(); } };
+  return el('div', { class: 'pair-form' },
+    el('label', { for: inp.id, text: 'اكتب الرمز الظاهر على الشاشة' }),
+    el('div', { class: 'pair-row' }, inp, btn, el('button', { class: 'mini-button', type: 'button', text: 'إلغاء', onclick: () => { S.pairOpen = null; renderAdmin(); } })),
+    err);
+}
+
 function renderLinks() {
   const ll = $('#link-list'); ll.replaceChildren();
   const row = (label, url) => el('div', { class: 'link-row' }, el('div', { class: 'row' }, el('b', { text: label }), el('button', { class: 'mini-button', type: 'button', text: 'نسخ', onclick: () => copy(url) })), el('code', { text: url }));
+  ll.append(row('رابط الشاشات (واحد لكل الشاشات)', ORIGIN + '/tv'),
+    el('div', { class: 'empty', style: 'border:0;padding-top:0', text: 'افتح هذا الرابط على أي شاشة، ثم اضغط «ربط شاشة بالرمز» بجانب اسم الشاشة واكتب الرمز الظاهر عليها.' }));
   ll.append(row('رابط الموظفين (QR)', EMPLOYEE_URL), row('رابط الإدارة', ORIGIN + '/admin'));
-  ll.append(el('div', { class: 'empty', text: 'رابط كل شاشة LG خاص بها، تجده تحت اسمها في «شاشات العرض».' }));
+  ll.append(el('div', { class: 'empty', text: 'لكل شاشة أيضًا رابط خاص (اختياري) تجده تحت اسمها في «شاشات العرض».' }));
 }
 
 function renderMedia() {
@@ -894,11 +988,13 @@ let offline = false;
 function setOffline(v) {
   if (v === offline) return; offline = v;
   if (v) note('انقطع الاتصال بالخادم، نحاول من جديد تلقائيًا…', true);
-  else note(MODE === 'screen' && S.pub && S.pub.screen === null ? 'هذه الشاشة غير موجودة أو تغيّر رابطها. انسخ رابط الشاشة من لوحة الإدارة ← «شاشات العرض».' : '');
+  else note(MODE === 'screen' && !IS_TV && S.pub && S.pub.screen === null ? 'هذه الشاشة غير موجودة أو تغيّر رابطها. انسخ رابط الشاشة من لوحة الإدارة ← «شاشات العرض».' : '');
 }
 async function refreshPublic(force) {
-  const url = '/api/state' + (MODE === 'screen' ? '?screen=' + encodeURIComponent(SCREEN_KEY) : '');
+  const key = SCREEN_KEY;
+  const url = '/api/state' + (MODE === 'screen' && key ? '?screen=' + encodeURIComponent(key) : '');
   const data = await poll(url, force).catch((e) => { if (e.code === 'network') setOffline(true); return null; });
+  if (data && key !== SCREEN_KEY) return; // the device was paired/unpaired while this request was in flight
   if (data) {
     setOffline(false);
     S.skew = data.serverNow - Date.now();
@@ -953,8 +1049,8 @@ async function boot() {
     every(CFG.adminPollMs, async () => { await refreshAdmin(); await refreshPublic(); });
   } else if (MODE === 'screen') {
     every(CFG.screenPollMs, () => refreshPublic());
-    const beat = () => api('POST', `/api/screens/${encodeURIComponent(SCREEN_KEY)}/heartbeat`).catch(() => {});
-    if (SCREEN_KEY) { beat(); setInterval(beat, CFG.heartbeatMs); }
+    heartbeat(); setInterval(heartbeat, CFG.heartbeatMs);
+    if (IS_TV && !SCREEN_KEY) startPairing();
   } else {
     every(CFG.phonePollMs, () => refreshPublic());
   }

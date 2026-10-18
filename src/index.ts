@@ -69,6 +69,10 @@ async function handleApi(req: Request, env: Env, url: URL): Promise<Response> {
   if (p0 === "messages" && m === "POST" && !p1) return api.sendMessage(req, env, b);
   if (p0 === "account" && m === "GET") return api.myAccount(req, env);
   if (p0 === "screens" && p1 && p2 === "heartbeat" && m === "POST") return api.heartbeat(env, p1);
+  if (p0 === "tv" && p1 === "pair") {
+    if (!p2 && m === "POST") return api.createPairing(req, env);
+    if (p2 && m === "GET") return api.pairingStatus(env, p2);
+  }
   if (p0 === "setup") {
     if (m === "GET") return json(await auth.setupStatus(env));
     if (m === "POST") return auth.setup(req, env, b);

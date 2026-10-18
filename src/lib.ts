@@ -1,5 +1,6 @@
 // Shared helpers: responses, validation, crypto, throttling.
 import schemaSql from "../migrations/0001_init.sql";
+import pairingSql from "../migrations/0002_tv_pairing.sql";
 
 export interface Env {
   DB: D1Database;
@@ -174,23 +175,35 @@ export function bump(db: D1Database): D1PreparedStatement {
 // ---------- schema bootstrap ----------
 let schemaReady = false;
 
-/** Applies migrations/0001_init.sql once per isolate if the tables are missing (idempotent). */
-export async function ensureSchema(db: D1Database): Promise<void> {
-  if (schemaReady) return;
-  try {
-    await db.prepare("SELECT version FROM app_state WHERE id = 1").first();
-    schemaReady = true;
-    return;
-  } catch {
-    /* tables missing: create them below */
-  }
-  const statements = schemaSql
+function sqlStatements(sql: string): string[] {
+  return sql
     .split("\n")
     .map((l) => l.replace(/--.*$/, ""))
     .join("\n")
     .split(";")
-    .map((s) => s.trim())
+    .map((x) => x.trim())
     .filter(Boolean);
-  await db.batch(statements.map((s) => db.prepare(s)));
+}
+
+async function tableExists(db: D1Database, check: string): Promise<boolean> {
+  try {
+    await db.prepare(check).first();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Creates or upgrades the tables once per isolate. Production relies on this (the deploy does not run
+ * `wrangler d1 migrations apply`). Every migration file is idempotent (IF NOT EXISTS), and 0001 runs only
+ * when the database is empty, so existing data is never touched.
+ */
+export async function ensureSchema(db: D1Database): Promise<void> {
+  if (schemaReady) return;
+  const pending: string[] = [];
+  if (!(await tableExists(db, "SELECT version FROM app_state WHERE id = 1"))) pending.push(...sqlStatements(schemaSql));
+  if (!(await tableExists(db, "SELECT 1 FROM screen_pairings LIMIT 1"))) pending.push(...sqlStatements(pairingSql));
+  if (pending.length) await db.batch(pending.map((x) => db.prepare(x)));
   schemaReady = true;
 }

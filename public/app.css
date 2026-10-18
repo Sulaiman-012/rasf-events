@@ -215,3 +215,15 @@ html.screen-mode .featured-message{margin-top:auto}
   .media-stage .stage-msg{left:330px;bottom:40px;right:40px;padding:22px 28px}
   .media-stage .stage-msg span{font-size:20px}.media-stage .stage-msg strong{font-size:34px}
 }
+/* ---- /tv pairing badge (corner of the dark header) and admin pairing form ---- */
+.topbar{position:relative}
+.pair-badge{position:absolute;top:50%;left:22px;transform:translateY(-50%);display:grid;gap:2px;justify-items:center;padding:8px 14px;border-radius:14px;background:rgba(246,238,227,.08);border:1px solid rgba(233,214,192,.28);color:#e9d6c0;line-height:1.1}
+.pair-badge span{font-size:12px;font-weight:600;opacity:.85}
+.pair-badge b{font-size:30px;font-weight:700;letter-spacing:.12em;font-variant-numeric:tabular-nums;color:#fbf4eb}
+@media (min-width:900px) and (min-height:1500px){.pair-badge{left:34px;padding:12px 22px;border-radius:18px}.pair-badge span{font-size:18px}.pair-badge b{font-size:50px}}
+.pair-form{width:100%;display:grid;gap:6px;padding:12px;margin-top:4px;border-radius:12px;background:#eadbca}
+.pair-form label{font-size:14px;font-weight:700;color:#664c39}
+.pair-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.pair-input{width:120px;font-size:24px;font-weight:700;letter-spacing:.2em;text-align:center;border:1px solid #d8c5ae;background:#fffaf3;padding:6px 8px}
+.pair-row .primary-button{padding:9px 18px}
+.pair-error{color:#b04d3b;font-size:13px;min-height:18px}

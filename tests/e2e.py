@@ -96,8 +96,9 @@ with sync_playwright() as p:
     check("image uploaded, compressed and served from D1", head.status == 200 and head.headers.get("content-type") == "image/jpeg" and "immutable" in head.headers.get("cache-control", ""), f"{head.status} {head.headers.get('content-type')} {len(head.body())}B")
 
     # Show the question now
-    a.locator("#admin-questions button", has_text="اعرضه الآن").first.click()
+    # The question dialog's "show immediately" box is ticked by default, so it is already live.
     expect(a.locator("#admin-questions")).to_contain_text("معروض الآن")
+    check("new question shown immediately (default checkbox)", True)
     st = a.request.get(BASE + "/api/state").json()
     check("public state never exposes the correct answer", "correct" not in json.dumps(st["question"]), json.dumps(st["question"], ensure_ascii=False)[:120])
 
@@ -184,6 +185,60 @@ with sync_playwright() as p:
     expect(a.locator("#screen-list")).to_contain_text("متصلة الآن")
     check("screen heartbeat shows online in admin", True)
     a.screenshot(path=str(OUT / "07-admin-manage.png"), full_page=True)
+
+    # ---------------- 4b. single shared link /tv with code pairing ----------------
+    a.click("[data-resource=screen]"); a.fill("#r-name", "شاشة الممر"); a.click("#resource-form button[type=submit]")
+    row2 = a.locator("#screen-list .resource-item", has_text="شاشة الممر")
+    expect(row2).to_contain_text("لم تتصل بعد")
+    row2.locator("select").select_option(index=1)  # show the image on this screen
+    expect(a.locator("#media-grid")).to_contain_text("معروضة على ٢ شاشة", timeout=10000)
+    links = a.text_content("#link-list")
+    check("links card lists the single /tv link first", links.strip().startswith("رابط الشاشات (واحد لكل الشاشات)") and "/tv" in links)
+
+    tv_ctx = browser.new_context(viewport={"width": 540, "height": 960}, locale="ar-SA")
+    tv = watch(tv_ctx.new_page(), "tv")
+    tv.goto(BASE + "/tv")
+    expect(tv.locator("#pair-badge")).to_be_visible(timeout=15000)
+    code1 = tv.text_content("#pair-code").strip()
+    expect(tv.locator("#competition-title")).to_contain_text("تأسست الدولة")
+    check("unpaired /tv shows quiz + 4-digit pairing code", re.fullmatch(r"[1-9]\d{3}", code1) is not None, code1)
+    check("unpaired /tv disables touch answering", tv.is_hidden("#participant-entry") and "امسح الرمز" in tv.text_content("#participant-status") and tv.locator(".option:enabled").count() == 0)
+    tv.wait_for_timeout(500)
+    tv.screenshot(path=str(OUT / "13-tv-unpaired-540x960.png"))
+    tvbig = watch(browser.new_context(viewport={"width": 1080, "height": 1920}, locale="ar-SA").new_page(), "tvbig")
+    tvbig.goto(BASE + "/tv"); expect(tvbig.locator("#pair-badge")).to_be_visible(timeout=15000); tvbig.wait_for_timeout(500)
+    tvbig.screenshot(path=str(OUT / "14-tv-unpaired-1080x1920.png"))
+    check("unpaired /tv 1080x1920 fits without scrolling", tvbig.evaluate("document.documentElement.scrollHeight <= 1921"))
+    r = api(tv, "POST", "/api/admin/screens/1/pair", {"code": code1})
+    check("pair claim requires staff (401)", r["status"] == 401, str(r["status"]))
+
+    row2.locator("button", has_text="ربط شاشة بالرمز").click()
+    a.fill("#screen-list .pair-input", "0000")
+    a.locator("#screen-list .pair-form button", has_text="ربط").click()
+    expect(a.locator("#screen-list .pair-error")).to_contain_text("الرمز غير صحيح أو منتهي")
+    check("wrong code rejected in Arabic", True)
+    a.fill("#screen-list .pair-input", code1)
+    a.locator(".control-card:has(#screen-list)").screenshot(path=str(OUT / "15-admin-pairing-input.png"))
+    a.locator("#screen-list .pair-form button", has_text="ربط").click()
+    expect(a.locator("#toast")).to_contain_text("تم ربط الشاشة")
+    expect(tv.locator("#media-stage")).to_be_visible(timeout=20000)
+    key2 = tv.evaluate("localStorage.getItem('rasf_screen_key')")
+    check("paired /tv switches to the screen's content and stores the key", tv.is_hidden("#pair-badge") and bool(key2) and key2 in a.text_content("#screen-list"), key2)
+    r = tv.request.get(BASE + "/api/tv/pair/" + "x" * 43)
+    check("unknown pairing token → 410", r.status == 410, str(r.status))
+    a.wait_for_timeout(1500); a.reload(); expect(a.locator("#admin")).to_have_class(re.compile("active"), timeout=10000)
+    expect(a.locator("#screen-list .resource-item", has_text="شاشة الممر")).to_contain_text("متصلة الآن", timeout=15000)
+    check("paired /tv sends heartbeat (متصلة الآن)", True)
+    tv.reload(); tv.wait_for_timeout(2500)
+    check("pairing survives reload (localStorage)", tv.is_visible("#media-stage") and tv.is_hidden("#pair-badge"))
+
+    rot = a.locator("#screen-list .resource-item", has_text="شاشة الممر").locator("button", has_text="رابط جديد")
+    rot.click(); a.locator("#screen-list .resource-item", has_text="شاشة الممر").locator("button", has_text="تأكيد").click()
+    expect(a.locator("#toast")).to_contain_text("رابط جديد")
+    expect(tv.locator("#pair-badge")).to_be_visible(timeout=20000)
+    code2 = tv.text_content("#pair-code").strip()
+    check("after «رابط جديد» the /tv device falls back to a new code", tv.is_hidden("#media-stage") and tv.evaluate("localStorage.getItem('rasf_screen_key')") is None and re.fullmatch(r"[1-9]\d{3}", code2) is not None, f"{code1} -> {code2}")
+    tv_ctx.close()
 
     # ---------------- 5. insights + Excel ----------------
     a.click("[data-pane=insights]")

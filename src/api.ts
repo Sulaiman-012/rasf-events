@@ -1,6 +1,6 @@
 // Competition, screens, media, messages, analytics: the JSON API used by the pages.
 import {
-  Body, COLOR_RE, Env, bump, fail, int, json, limit, now, optId, optStr, optTime, screenKey, str,
+  Body, COLOR_RE, Env, bump, clientIp, fail, int, json, limit, now, optId, optStr, optTime, randomToken, screenKey, sha256, str,
 } from "./lib";
 import { Participant, Staff, currentParticipant, participantName, requireStaff } from "./auth";
 
@@ -325,6 +325,51 @@ async function storeMedia(env: Env, name: string, kind: "image" | "logo", up: { 
 }
 
 // ======================================================================
+// Single shared screen link (/tv): code pairing
+// ======================================================================
+const PAIR_TTL_MS = 15 * 60_000;
+const PAIR_CODE_RE = /^\d{4}$/;
+
+function randomCode(): string {
+  // 1000..9999 so the code never starts with 0 (easier to read aloud and type).
+  const n = crypto.getRandomValues(new Uint32Array(1))[0] % 9000;
+  return String(1000 + n);
+}
+
+/** An unpaired /tv device asks for a code. Returns the code (shown on screen) and a secret token (kept by the device). */
+export async function createPairing(req: Request, env: Env): Promise<Response> {
+  await limit(env.DB, "tvpair:" + clientIp(req), 30, 15 * 60_000, "طلبات ربط كثيرة من هذه الشبكة، انتظر قليلًا.");
+  const t = now();
+  await env.DB.prepare("DELETE FROM screen_pairings WHERE expires_at < ?").bind(t).run(); // opportunistic cleanup
+  for (let i = 0; i < 12; i++) {
+    const code = randomCode();
+    const token = randomToken(32);
+    // Insert only if no unexpired pairing already uses this code.
+    const r = await env.DB.prepare(
+      `INSERT INTO screen_pairings (token_hash, code, screen_id, created_at, expires_at)
+       SELECT ?, ?, NULL, ?, ? WHERE NOT EXISTS (SELECT 1 FROM screen_pairings WHERE code = ? AND expires_at > ?)`,
+    ).bind(await sha256(token), code, t, t + PAIR_TTL_MS, code, t).run();
+    if (r.meta.changes) return json({ code, token, expiresAt: t + PAIR_TTL_MS });
+  }
+  fail(503, "busy", "تعذر إنشاء رمز الآن، حاول بعد لحظات.");
+}
+
+/** The device polls with its token: waiting, claimed (returns the screen key once), or expired (410). */
+export async function pairingStatus(env: Env, token: string): Promise<Response> {
+  if (!/^[A-Za-z0-9_-]{20,100}$/.test(token)) fail(410, "expired", "انتهى الرمز.");
+  const hash = await sha256(token);
+  const row = await env.DB.prepare(
+    `SELECT p.screen_id AS screenId, s.key AS screenKey FROM screen_pairings p LEFT JOIN screens s ON s.id = p.screen_id
+     WHERE p.token_hash = ? AND p.expires_at > ?`,
+  ).bind(hash, now()).first<{ screenId: number | null; screenKey: string | null }>();
+  if (!row) fail(410, "expired", "انتهى الرمز.");
+  if (!row.screenId || !row.screenKey) return json({ status: "waiting" });
+  // One-time delivery: the token cannot be replayed afterwards.
+  await env.DB.prepare("DELETE FROM screen_pairings WHERE token_hash = ?").bind(hash).run();
+  return json({ status: "paired", screenKey: row.screenKey });
+}
+
+// ======================================================================
 // Admin (owner + manager)
 // ======================================================================
 export async function adminData(req: Request, env: Env): Promise<Response> {
@@ -606,6 +651,23 @@ export async function adminRoute(req: Request, env: Env, parts: string[], b: Bod
         await imageExists(env, mediaId);
         await mustChange(await DB.prepare("UPDATE screens SET content_media_id = ? WHERE id = ?").bind(mediaId, id).run());
         await bump(DB).run();
+        return ok();
+      }
+      if (m === "POST" && id !== null && action === "pair") {
+        await limit(DB, "tvclaim:" + me.id, 20, 15 * 60_000, "محاولات ربط كثيرة، انتظر قليلًا ثم حاول.");
+        const code = typeof b.code === "string" ? b.code.trim().replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))) : "";
+        if (!PAIR_CODE_RE.test(code)) fail(400, "invalid", "اكتب الرمز المكوّن من ٤ أرقام الظاهر على الشاشة.");
+        const screen = await DB.prepare("SELECT 1 FROM screens WHERE id = ?").bind(id).first();
+        if (!screen) fail(404, "not_found", "الشاشة غير موجودة، ربما حُذفت.");
+        const t = now();
+        const p = await DB.prepare(
+          "SELECT token_hash FROM screen_pairings WHERE code = ? AND expires_at > ? AND screen_id IS NULL ORDER BY created_at DESC LIMIT 1",
+        ).bind(code, t).first<{ token_hash: string }>();
+        if (!p) fail(400, "bad_code", "الرمز غير صحيح أو منتهي.");
+        await DB.batch([
+          DB.prepare("UPDATE screen_pairings SET screen_id = ? WHERE token_hash = ?").bind(id, p.token_hash),
+          DB.prepare("DELETE FROM screen_pairings WHERE code = ? AND token_hash <> ?").bind(code, p.token_hash),
+        ]);
         return ok();
       }
       if (m === "POST" && id !== null && action === "rekey") {

@@ -6,6 +6,7 @@
     phonePollMs    employee phones and the results page
     adminPollMs    the admin dashboard
     heartbeatMs    each screen reports "online" to the admin dashboard
+    pairPollMs     an unpaired /tv screen checks whether its code was claimed
 */
 window.RASF_CONFIG = {
   screenPollMs: 5000,
@@ -13,4 +14,5 @@ window.RASF_CONFIG = {
   adminPollMs: 10000,
   heartbeatMs: 60000,
   kioskResetMs: 7000,
+  pairPollMs: 5000,
 };
