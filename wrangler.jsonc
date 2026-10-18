@@ -22,7 +22,7 @@
     {
       "binding": "DB",
       "database_name": "rasf-events",
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "ca939fa0-58bd-437a-adc8-9392d4155907",
       "migrations_dir": "migrations"
     }
   ],
