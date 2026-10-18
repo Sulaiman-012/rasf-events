@@ -1,5 +1,5 @@
 # Deploys the platform to Cloudflare (free plan) on every push to main, or manually from the Actions tab.
-# Needs 4 repository secrets: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, SETUP_KEY, SESSION_SECRET.
+# Needs 3 repository secrets: CLOUDFLARE_API_TOKEN, SETUP_KEY, SESSION_SECRET.
 name: Deploy to Cloudflare
 
 on:
@@ -26,7 +26,7 @@ jobs:
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          accountId: 6783d6f9f0039732fb9344bc0cc867ed
           secrets: |
             SETUP_KEY
             SESSION_SECRET

@@ -2,6 +2,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "rasf-events",
+  "account_id": "6783d6f9f0039732fb9344bc0cc867ed",
   "main": "src/index.ts",
   "compatibility_date": "2025-09-01",
   "workers_dev": true,
