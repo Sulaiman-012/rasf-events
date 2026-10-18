@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#241c18">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>مسابقة رصف</title>
+<link rel="icon" href="/rasf-logo.png" type="image/png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/app.css">
+<script src="/boot.js"></script>
+</head>
+<body>
+<div class="ambient ambient-one"></div><div class="ambient ambient-two"></div>
+<main class="app-shell">
+  <header class="topbar">
+    <a href="/" class="brand" aria-label="مسابقة رصف"><span id="brand-mark" class="brand-mark"><img src="/rasf-logo.png" alt="شعار رصف"></span><span>رصف</span></a>
+    <nav class="main-nav" aria-label="التنقل الرئيسي">
+      <button class="nav-link active" data-view="display">المسابقة</button>
+      <button class="nav-link" data-view="results">النتائج</button>
+      <button class="nav-link" data-view="account" id="nav-account">حسابي</button>
+      <button class="nav-link" data-view="admin" id="nav-admin" hidden>الإدارة</button>
+    </nav>
+    <div class="head-side"><span id="role-chip" class="role-chip" hidden></span><button id="logout" class="logout" type="button" hidden>خروج</button><div class="live-pill" id="live-pill"><i></i> <span>بانتظار السؤال</span></div></div>
+  </header>
+  <div id="access-note" class="access-note" hidden></div>
+
+  <!-- ================= Employee display ================= -->
+  <section id="display" class="view active" aria-labelledby="competition-title">
+    <div class="display-layout">
+      <article class="question-card glass-panel">
+        <div class="question-meta"><span id="round-label" class="round-label">مسابقة رصف</span><span id="question-number"></span></div>
+        <div class="timer-row" id="timer-row" hidden><div class="timer-track"><div id="timer-progress"></div></div><div id="timer-number" class="timer-number">١٥</div><span>ثانية</span></div>
+        <h1 id="competition-title">ترقّبوا السؤال القادم</h1>
+        <p id="question-support" class="question-support">يظهر السؤال هنا فور تفعيله من الإدارة.</p>
+        <div class="participant-entry" id="participant-entry" hidden><input id="participant-name" placeholder="اكتب اسمك للمشاركة" autocomplete="name" maxlength="60" minlength="2"><span id="greet" class="greet" hidden></span><button id="start-answer" class="primary-button" type="button">بدء المشاركة</button></div>
+        <p id="participant-status" class="participant-status"></p>
+        <div id="options" class="options" role="group" aria-label="خيارات الإجابة"></div>
+        <div id="feedback" class="feedback" aria-live="polite"></div>
+        <aside id="featured-message" class="featured-message" hidden><span>رسالة من فريق رصف</span><strong id="featured-text"></strong></aside>
+      </article>
+
+      <aside class="join-card glass-panel">
+        <div class="join-icon">⌁</div>
+        <p class="eyebrow">شارك من جوالك</p>
+        <h2>امسح الرمز وانضم للمسابقة</h2>
+        <div class="qr-frame" id="qr-frame" role="img" aria-label="رمز QR لرابط المسابقة"></div>
+        <p class="qr-purpose">للمشاركة والإجابة: امسح الرمز وافتح المسابقة من جوالك</p>
+        <p id="join-url" class="join-url"></p>
+        <div class="message-box" id="message-box">
+          <label for="employee-message">رسالة للشاشة</label>
+          <input id="message-name" class="msg-name" placeholder="اسمك (يظهر للإدارة فقط)" maxlength="60" autocomplete="name" hidden>
+          <textarea id="employee-message" maxlength="180" placeholder="اكتب كلمة جميلة لزملائك"></textarea>
+          <button id="send-message" class="secondary-button" type="button">إرسال للمراجعة</button>
+          <small id="message-status">تظهر الرسالة على الشاشات بعد اعتماد الإدارة.</small>
+        </div>
+        <div class="participants"><span class="people-icon">◉</span><strong id="participant-count">٠</strong><span>مشاركًا حتى الآن</span></div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ================= Results ================= -->
+  <section id="results" class="view" aria-labelledby="results-title">
+    <div class="page-heading"><p class="eyebrow">لوحة النتائج</p><h1 id="results-title">نجوم مسابقة رصف</h1><p id="results-sub">ترتيب مباشر: ١٠٠ نقطة لكل إجابة صحيحة، وعند التعادل يتقدم الأسبق.</p><button id="export-results" class="secondary-button" type="button" hidden>تصدير النتائج Excel</button></div>
+    <div class="results-grid" id="podium"></div>
+    <div class="results-table glass-panel" id="results-table" hidden></div>
+  </section>
+
+  <!-- ================= My account ================= -->
+  <section id="account" class="view" aria-labelledby="account-title">
+    <div class="page-heading"><p class="eyebrow">حسابي</p><h1 id="account-title">أهلًا</h1><p id="account-role"></p></div>
+    <div class="kpi-row" id="account-kpis"></div>
+    <div class="admin-grid account-grid">
+      <div class="admin-card glass-panel" style="grid-column:span 2"><h2>سجل مشاركاتي</h2><div id="account-history"></div></div>
+      <div class="admin-card glass-panel"><h2>رسائلي</h2><div id="account-messages"></div></div>
+    </div>
+  </section>
+
+  <!-- ================= Sign in / setup / password ================= -->
+  <section id="login" class="view" aria-labelledby="login-title">
+    <div class="auth-wrap">
+      <form class="auth-card glass-panel" id="login-form" autocomplete="on">
+        <p class="eyebrow">لوحة الإدارة</p>
+        <h1 id="login-title">تسجيل الدخول</h1>
+        <p>للمالك والمديرين فقط. الموظفون لا يحتاجون حسابًا، يكفي مسح رمز QR.</p>
+        <label>البريد الإلكتروني<input id="login-email" type="email" autocomplete="username" dir="ltr" required maxlength="254"></label>
+        <label>كلمة المرور<input id="login-password" type="password" autocomplete="current-password" dir="ltr" required maxlength="128"></label>
+        <button class="primary-button" type="submit">دخول</button>
+        <p class="form-error" id="login-error" role="alert"></p>
+      </form>
+    </div>
+  </section>
+
+  <section id="setup" class="view" aria-labelledby="setup-title">
+    <div class="auth-wrap">
+      <form class="auth-card glass-panel" id="setup-form" autocomplete="off">
+        <p class="eyebrow">التشغيل لأول مرة</p>
+        <h1 id="setup-title">إنشاء حساب مالك المنصة</h1>
+        <p id="setup-intro">هذه الخطوة تتم مرة واحدة فقط. اكتب «مفتاح الإعداد» الذي وضعته في إعدادات Cloudflare باسم <b dir="ltr">SETUP_KEY</b>.</p>
+        <label>مفتاح الإعداد<input id="setup-key" type="password" dir="ltr" required maxlength="200" autocomplete="off"></label>
+        <label>اسمك<input id="setup-name" required maxlength="60" minlength="2" autocomplete="name"></label>
+        <label>البريد الإلكتروني<input id="setup-email" type="email" dir="ltr" required maxlength="254" autocomplete="username"></label>
+        <label>كلمة المرور <span class="hint">(٨ أحرف على الأقل)</span><input id="setup-password" type="password" dir="ltr" required minlength="8" maxlength="128" autocomplete="new-password"></label>
+        <button class="primary-button" type="submit">إنشاء الحساب والدخول</button>
+        <p class="form-error" id="setup-error" role="alert"></p>
+      </form>
+    </div>
+  </section>
+
+  <section id="password" class="view" aria-labelledby="password-title">
+    <div class="auth-wrap">
+      <form class="auth-card glass-panel" id="password-form">
+        <p class="eyebrow">أمان الحساب</p>
+        <h1 id="password-title">تغيير كلمة المرور</h1>
+        <p id="password-intro">اختر كلمة مرور جديدة خاصة بك.</p>
+        <label>كلمة المرور الحالية<input id="pw-current" type="password" dir="ltr" required maxlength="128" autocomplete="current-password"></label>
+        <label>كلمة المرور الجديدة <span class="hint">(٨ أحرف على الأقل)</span><input id="pw-next" type="password" dir="ltr" required minlength="8" maxlength="128" autocomplete="new-password"></label>
+        <button class="primary-button" type="submit">حفظ كلمة المرور</button>
+        <p class="form-error" id="password-error" role="alert"></p>
+      </form>
+    </div>
+  </section>
+
+  <!-- ================= Admin ================= -->
+  <section id="admin" class="view" aria-labelledby="admin-title">
+    <div class="admin-heading"><div><p class="eyebrow" id="admin-eyebrow">مدير النظام</p><h1 id="admin-title">لوحة تحكم رصف</h1><p>أنشئ المسابقة، رتّب مجموعات الشاشات، ثم اربط العرض المناسب بكل شاشة.</p></div><div class="admin-actions"><button id="stop-question" class="secondary-button" type="button">إيقاف السؤال</button><button id="next-question" class="secondary-button" type="button">السؤال التالي</button><button id="new-question" class="primary-button" type="button">+ إضافة سؤال</button></div></div>
+    <div class="admin-tabs" role="tablist"><button class="admin-tab active" data-pane="manage" type="button">الإدارة</button><button class="admin-tab" data-pane="insights" type="button">التحليلات</button><button class="admin-tab" data-pane="roles" type="button">الصلاحيات</button></div>
+    <div id="pane-manage">
+    <div class="control-grid">
+      <article class="control-card glass-panel"><div class="control-top"><span class="control-icon">✦</span><button class="mini-button" data-resource="competition" type="button">+ مسابقة</button></div><h2>المسابقات</h2><p>أنشئ المسابقة وحدد وقتها، ثم فعّل المسابقة الجارية.</p><div id="competition-list" class="resource-list"></div></article>
+      <article class="control-card glass-panel"><div class="control-top"><span class="control-icon">◫</span><button class="mini-button" data-resource="group" type="button">+ مجموعة</button></div><h2>مجموعات العرض</h2><p>اجمع الشاشات حسب الموقع أو القسم.</p><div id="group-list" class="resource-list"></div></article>
+      <article class="control-card glass-panel"><div class="control-top"><span class="control-icon">▣</span><button class="mini-button" data-resource="screen" type="button">+ شاشة</button></div><h2>شاشات العرض</h2><p>اختر ما تعرضه كل شاشة وانسخ رابطها لجهاز LG.</p><div id="screen-list" class="resource-list"></div></article>
+      <article class="control-card glass-panel"><div class="control-top"><span class="control-icon">✹</span><button class="mini-button" data-resource="event" type="button">+ فعالية</button></div><h2>استوديو الفعاليات</h2><p>جهّز باقة الفعالية: مسابقة وصورة ومجموعة شاشات، ثم شغّلها بضغطة.</p><div id="event-list" class="resource-list"></div></article>
+      <article class="control-card glass-panel"><div class="control-top"><span class="control-icon">✉</span><span id="message-badge" class="resource-status">٠ جديدة</span></div><h2>رسائل الموظفين</h2><p>راجع الرسائل ثم اعرض المختار منها على الشاشات.</p><div id="message-list" class="resource-list"></div></article>
+      <article class="control-card glass-panel"><div class="control-top"><span class="control-icon">⌘</span></div><h2>روابط المنصة</h2><p>رابط الموظفين يفتحه رمز QR، ورابط كل شاشة في قائمة الشاشات.</p><div id="link-list" class="resource-list"></div></article>
+    </div>
+    <div class="admin-grid">
+      <div class="admin-card glass-panel"><h2>مكتبة الصور</h2><p class="empty" style="border:0;padding:0">ارفع الصور من الجوال أو الكمبيوتر، ثم اخترها لشاشة أو مجموعة. الأنسب للشاشة الطولية مقاس ١٠٨٠×١٩٢٠. تُضغط الصورة تلقائيًا قبل الرفع.</p><div class="upload-box"><input id="media-upload" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple><span id="upload-status" class="upload-status" aria-live="polite"></span></div><div id="media-grid" class="media-grid"></div></div>
+      <div class="admin-card glass-panel identity-card"><h2>هوية الشركة</h2><p id="identity-lock" class="empty" style="border:0;padding:0" hidden>تعديل الهوية لمالك المنصة فقط.</p><div class="identity-preview"><span id="identity-logo-preview" class="brand-mark"><img src="/rasf-logo.png" alt="معاينة الشعار"></span><span>معاينة الشعار</span></div><label>شعار الشركة<input id="logo-upload" type="file" accept="image/png,image/jpeg,image/webp"></label><div class="color-fields"><label>اللون الرئيسي<input id="primary-color" type="color" value="#8d6d52"></label><label>لون التمييز<input id="accent-color" type="color" value="#c6ab8c"></label><label>لون الخلفية<input id="background-color" type="color" value="#f3eee7"></label></div><div class="dialog-actions" style="margin-top:12px"><button id="save-identity" class="secondary-button" type="button">حفظ الهوية</button><button id="reset-identity" class="mini-button" type="button">استعادة هوية رصف</button></div></div>
+      <div class="admin-card glass-panel"><h2>جدولة المسابقة</h2><p class="empty" id="schedule-for" style="border:0;padding:0"></p><label>بداية المسابقة<input id="start-date" type="datetime-local"></label><label>نهاية المسابقة<input id="end-date" type="datetime-local"></label><button id="save-schedule" class="secondary-button" type="button">حفظ الجدولة</button></div>
+      <div class="admin-card glass-panel" style="grid-column:1/-1"><h2>أسئلة المسابقة</h2><p class="empty" id="questions-for" style="border:0;padding:0"></p><div id="admin-questions" class="admin-questions"></div></div>
+    </div>
+    </div>
+    <div id="pane-insights" hidden>
+      <div class="insights-bar glass-panel"><label>المسابقة<select id="insights-comp"></select></label><button id="export-insights" class="primary-button" type="button">تصدير Excel</button></div>
+      <div class="kpi-row" id="insights-kpis"></div>
+      <div id="insights-questions" class="insights-list"></div>
+    </div>
+    <div id="pane-roles" hidden>
+      <div class="admin-grid roles-grid">
+        <div class="admin-card glass-panel" style="grid-column:1/-1"><h2>الأدوار في المنصة</h2><div class="role-table" id="role-table"></div><p class="empty" style="border:0;padding:0;margin-top:14px">الصلاحيات محمية من الخادم، فما يقدر أحد يتجاوزها من المتصفح. المالك يضيف المديرين من البطاقة التالية، والموظف لا يحتاج حسابًا.</p></div>
+        <div class="admin-card glass-panel" style="grid-column:1/-1" id="staff-card" hidden>
+          <h2>حسابات الإدارة</h2>
+          <p class="empty" style="border:0;padding:0">أضف مديرًا بكلمة مرور مؤقتة وأرسلها له بطريقة آمنة؛ سيُطلب منه تغييرها عند أول دخول.</p>
+          <form id="staff-form" class="staff-form" autocomplete="off">
+            <label>الاسم<input id="staff-name" required minlength="2" maxlength="60"></label>
+            <label>البريد الإلكتروني<input id="staff-email" type="email" dir="ltr" required maxlength="254"></label>
+            <label>كلمة مرور مؤقتة<input id="staff-password" dir="ltr" required minlength="8" maxlength="128" autocomplete="off"></label>
+            <button class="primary-button" type="submit">+ إضافة مدير</button>
+          </form>
+          <p class="form-error" id="staff-error" role="alert"></p>
+          <div id="staff-list" class="resource-list"></div>
+        </div>
+        <div class="admin-card glass-panel" style="grid-column:1/-1">
+          <h2>كلمة مروري</h2>
+          <form id="my-pw-form" class="pw-form">
+            <label>الحالية<input id="my-pw-current" type="password" dir="ltr" required maxlength="128" autocomplete="current-password"></label>
+            <label>الجديدة<input id="my-pw-next" type="password" dir="ltr" required minlength="8" maxlength="128" autocomplete="new-password"></label>
+            <button class="secondary-button" type="submit">تغيير</button>
+          </form>
+          <p class="form-error" id="my-pw-error" role="alert"></p>
+        </div>
+        <div class="admin-card glass-panel" style="grid-column:1/-1"><h2>المشاركون في المنصة</h2><p class="empty" style="border:0;padding:0">كل من شارك في مسابقة أو أرسل رسالة. المشاركون عبر شاشة اللمس يظهرون باسم الشاشة.</p><div id="people-list" class="people-list"></div></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="media-stage" class="media-stage" hidden><div id="stage-media"></div><div id="stage-msg" class="stage-msg" hidden><span>رسالة من فريق رصف</span><strong id="stage-msg-text"></strong></div><div class="stage-qr" id="stage-qr"></div></div>
+
+<dialog id="question-dialog"><form method="dialog" id="question-form"><button type="button" class="close-button" data-close aria-label="إغلاق">×</button><p class="eyebrow">محرر السؤال</p><h2>إضافة أو تعديل سؤال</h2><input id="edit-id" type="hidden"><label>المسابقة<select id="edit-comp"></select></label><label>نص السؤال<textarea id="edit-question" maxlength="300"></textarea></label><div class="form-options"><label>نوع السؤال<select id="edit-type"><option value="choice">اختيارات متعددة</option><option value="truefalse">صح أو خطأ</option><option value="short">نص قصير</option><option value="essay">إجابة مقالية</option></select></label><label>عدد المحاولات<input id="edit-attempts" type="number" min="1" max="10" value="1"></label><label>مدة الإجابة (ثانية)<input id="edit-duration" type="number" min="5" max="300" value="20"></label></div><div id="edit-options" class="form-options"></div><label id="edit-correct-label">الإجابة الصحيحة<select id="edit-correct"></select></label><p id="question-error" class="dialog-error"></p><div class="dialog-actions"><button type="button" data-close class="secondary-button">إلغاء</button><button id="save-question" type="submit" class="primary-button">حفظ السؤال</button></div></form></dialog>
+
+<dialog id="resource-dialog"><form method="dialog" id="resource-form"><button type="button" class="close-button" data-close aria-label="إغلاق">×</button><p class="eyebrow">إدارة النظام</p><h2 id="resource-title">إضافة</h2><input id="resource-type" type="hidden"><input id="resource-id" type="hidden"><div id="field-wrap"></div><p id="resource-error" class="dialog-error"></p><div class="dialog-actions"><button type="button" data-close class="secondary-button">إلغاء</button><button type="submit" class="primary-button">حفظ</button></div></form></dialog>
+
+<div id="toast" class="toast" role="status" hidden></div>
+
+<script src="/vendor/qrcode.js"></script>
+<script src="/config.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>

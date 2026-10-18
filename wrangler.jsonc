@@ -1,0 +1,37 @@
+// Cloudflare configuration for the Rasf events platform (free plan: Workers + D1 only).
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "rasf-events",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-09-01",
+  "workers_dev": true,
+  "preview_urls": false,
+
+  // Pages, styles, scripts and the logo are served straight from ./public.
+  // Only /api/* reaches the Worker code. Any other path (/admin, /setup, /screen/xyz) gets index.html.
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+
+  // The D1 database. After creating it (dashboard or `npx wrangler d1 create rasf-events`),
+  // paste its id below in place of the zeros.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "rasf-events",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+
+  // Lets the Worker import migrations/0001_init.sql as text to create tables on first use.
+  "rules": [{ "type": "Text", "globs": ["**/*.sql"], "fallthrough": true }],
+
+  "observability": { "enabled": true }
+
+  // Secrets (never written here): SETUP_KEY and SESSION_SECRET.
+  // Set them in the dashboard (Worker → Settings → Variables and Secrets) or with `npx wrangler secret put NAME`.
+}

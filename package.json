@@ -1,0 +1,23 @@
+{
+  "name": "rasf-events",
+  "version": "1.0.0",
+  "description": "Rasf events & quiz platform on Cloudflare Workers + D1 (free plan)",
+  "scripts": {
+    "dev": "wrangler dev --local",
+    "db:local": "wrangler d1 migrations apply DB --local",
+    "db:remote": "wrangler d1 migrations apply DB --remote",
+    "deploy": "wrangler deploy",
+    "build:deploy": "wrangler d1 migrations apply DB --remote && wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "test:e2e": "python3 tests/e2e.py"
+  },
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261014.1",
+    "qrcode-generator": "^2.0.4",
+    "typescript": "^7.0.2",
+    "wrangler": "^4.151.0",
+    "xlsx": "^0.18.5"
+  },
+  "private": true
+}

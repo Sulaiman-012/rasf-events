@@ -1,0 +1,5 @@
+# Local development only (copy to .dev.vars). On Cloudflare, set these as encrypted secrets instead.
+# SETUP_KEY: one-time key you type on /setup to create the owner account.
+SETUP_KEY=change-me-local-setup-key
+# SESSION_SECRET: long random text (32+ characters) used to sign admin sessions.
+SESSION_SECRET=change-me-to-a-long-random-string-at-least-32-chars
