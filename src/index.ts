@@ -89,6 +89,7 @@ async function handleApi(req: Request, env: Env, url: URL): Promise<Response> {
       if (!p2 && m === "POST") return auth.addManager(req, env, b);
       if (p2 && m === "DELETE") return auth.removeManager(req, env, pathId(p2));
       if (p2 && parts[3] === "reset" && m === "POST") return auth.resetManager(req, env, pathId(p2), b);
+      if (p2 && parts[3] === "transfer-owner" && m === "POST") return auth.transferOwner(req, env, pathId(p2));
     }
     return api.adminRoute(req, env, parts.slice(1), b);
   }

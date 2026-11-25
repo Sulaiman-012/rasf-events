@@ -171,6 +171,20 @@ export async function resetManager(req: Request, env: Env, id: number, b: Body):
   return json({ ok: true });
 }
 
+/** Hands the owner role to an existing manager; the current owner becomes a manager. */
+export async function transferOwner(req: Request, env: Env, id: number): Promise<Response> {
+  const me = await requireStaff(req, env, { owner: true });
+  if (id === me.id) fail(400, "invalid", "أنت مالك المنصة بالفعل.");
+  const t = await env.DB.prepare("SELECT id, role, must_change FROM staff WHERE id = ?").bind(id).first<{ id: number; role: string; must_change: number }>();
+  if (!t || t.role !== "manager") fail(404, "not_found", "الحساب غير موجود.");
+  if (t.must_change) fail(400, "invalid", "لازم المدير يدخل ويغيّر كلمة المرور المؤقتة أولًا، بعدها تقدر تنقل له الملكية.");
+  await env.DB.batch([
+    env.DB.prepare("UPDATE staff SET role = 'owner' WHERE id = ? AND role = 'manager'").bind(id),
+    env.DB.prepare("UPDATE staff SET role = 'manager' WHERE id = ? AND role = 'owner'").bind(me.id),
+  ]);
+  return json({ ok: true });
+}
+
 // ---------- employees (no account: random token in an HttpOnly cookie) ----------
 export async function currentParticipant(req: Request, env: Env): Promise<Participant | null> {
   const tok = cookie(req, PARTICIPANT_COOKIE);

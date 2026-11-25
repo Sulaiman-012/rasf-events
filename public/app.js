@@ -771,7 +771,8 @@ function renderStaff() {
       const pw = el('input', { dir: 'ltr', placeholder: 'كلمة مرور مؤقتة جديدة', minlength: '8', maxlength: '128', autocomplete: 'off', 'aria-label': 'كلمة مرور مؤقتة جديدة لـ ' + s.name });
       row.append(el('span', { class: 'ri-actions' },
         el('span', { class: 'reset-row' }, pw, el('button', { class: 'mini-button', type: 'button', text: 'إعادة تعيين', onclick: async () => { if (pw.value.length < 8) return toast('كلمة المرور ٨ أحرف على الأقل.'); try { await api('POST', `/api/admin/staff/${s.id}/reset`, { password: pw.value }); pw.value = ''; toast('تم تعيين كلمة مرور مؤقتة؛ سيُطلب منه تغييرها.'); renderRoles(); } catch (e) { toast(e.message); } } })),
-        confirmButton('حذف الحساب', async () => { await api('DELETE', `/api/admin/staff/${s.id}`); toast('تم حذف الحساب.'); renderRoles(); })));
+        confirmButton('حذف الحساب', async () => { await api('DELETE', `/api/admin/staff/${s.id}`); toast('تم حذف الحساب.'); renderRoles(); }),
+        s.must_change ? null : confirmButton('نقل الملكية له', async () => { await api('POST', `/api/admin/staff/${s.id}/transfer-owner`); toast('تم نقل ملكية المنصة. أنت الآن مدير.'); setTimeout(() => location.reload(), 1500); })));
     }
     list.append(row);
   });
