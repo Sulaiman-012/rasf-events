@@ -1,0 +1,40 @@
+# Manual backup of the platform data (run from the Actions tab → "Backup database" → Run workflow).
+# Exports table contents only (no schema: the Worker creates tables itself) and leaves out
+# staff accounts, sessions, login throttling, live state and pending screen pairings,
+# so the file carries no password hashes or session data.
+# Needs the CLOUDFLARE_API_TOKEN secret to include the "D1: Edit" permission.
+name: Backup database
+
+on:
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Export data from D1
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: 6783d6f9f0039732fb9344bc0cc867ed
+          command: >-
+            d1 export rasf-events --remote --no-schema
+            --table competitions --table questions --table participants --table answers --table scores
+            --table messages --table screen_groups --table screens --table events --table media --table media_chunks
+            --output rasf-data.sql
+      - name: Summary
+        run: |
+          echo "حجم الملف: $(du -h rasf-data.sql | cut -f1)" >> "$GITHUB_STEP_SUMMARY"
+          echo "عدد الصفوف: $(grep -c '^INSERT' rasf-data.sql)" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rasf-data-backup
+          path: rasf-data.sql
+          retention-days: 3
